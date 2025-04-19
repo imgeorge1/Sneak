@@ -70,12 +70,11 @@ function SignOut() {
 function ChatRoom() {
   const dummy = useRef();
   const messagesRef = firestore.collection('messages');
-  const query = messagesRef.orderBy('createdAt').limit(25);
+  const query = messagesRef.orderBy('createdAt', 'desc').limit(25);
 
   const [messages] = useCollectionData(query, { idField: 'id' });
 
   const [formValue, setFormValue] = useState('');
-
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -87,30 +86,57 @@ function ChatRoom() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       uid,
       photoURL
-    })
+    });
 
     setFormValue('');
-    dummy.current.scrollIntoView({ behavior: 'smooth' });
+    dummy.current?.scrollIntoView({ behavior: 'smooth' });
+    const snapshot = await messagesRef.orderBy('createdAt', 'desc').get();
+    if (snapshot.size > 25) {
+      const oldMessages = snapshot.docs.slice(25); // skip the first 25
+      const batch = firestore.batch();
+      oldMessages.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
   }
+//
+  // DANGEROUS CODE!!!! ONLY UNCOMMENT WHEN YOU"RE SURE WHAT IT DOES
+    // const deleteAllMessages = async () => {
+    //   const snapshot = await messagesRef.get();
+    //   const batch = firestore.batch();
+    
+    //   snapshot.forEach((doc) => {
+    //     batch.delete(doc.ref);
+    //   });
+    
+    //   await batch.commit();
+    //   console.log('All messages deleted');
+    // };
+  // DANGEROUS CODE!!!! ONLY UNCOMMENT WHEN YOU"RE SURE WHAT IT DOES
+//
+  return (
+    <>
+      <main>
+        {messages &&
+          [...messages] // copy
+            .reverse()   // fix the order
+            .map(msg => <ChatMessage key={msg.id} message={msg} />)}
 
-  return (<>
-    <main>
+        <span ref={dummy}></span>
+      </main>
 
-      {messages && messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
-
-      <span ref={dummy}></span>
-
-    </main>
-
-    <form onSubmit={sendMessage}>
-
-      <input value={formValue} onChange={(e) => setFormValue(e.target.value)} placeholder="say something nice" />
-
-      <button type="submit" disabled={!formValue}>🕊️</button>
-
-    </form>
-  </>)
+      <form onSubmit={sendMessage}>
+        
+        <input
+          value={formValue}
+          onChange={(e) => setFormValue(e.target.value)}
+          placeholder="say something nice"
+        />
+        <button type="submit" disabled={!formValue}>🕊️</button>
+      </form>
+    </>
+  );
 }
+
 
 
 function ChatMessage(props) {
